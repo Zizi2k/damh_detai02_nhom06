@@ -13,7 +13,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2, Pencil } from "lucide-react";
 import {
   INITIAL_MENU_PRODUCTS,
   loadMenuProducts,
@@ -36,8 +36,12 @@ export default function MenuManagementPage() {
     useState<MenuProduct[]>(INITIAL_MENU_PRODUCTS);
   const [search, setSearch] = useState("");
   const [addOpen, setAddOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  const [editingId, setEditingId] = useState<number | null>(null);
   const [form, setForm] = useState(emptyForm);
+  const [editForm, setEditForm] = useState(emptyForm);
   const [formError, setFormError] = useState<string | null>(null);
+  const [editFormError, setEditFormError] = useState<string | null>(null);
 
   useEffect(() => {
     setMenuItems(loadMenuProducts());
@@ -106,6 +110,76 @@ export default function MenuManagementPage() {
     persistMenuProducts(next);
     setAddOpen(false);
     resetForm();
+  };
+
+  const resetEditForm = () => {
+    setEditForm(emptyForm);
+    setEditFormError(null);
+    setEditingId(null);
+  };
+
+  const handleEditOpenChange = (open: boolean) => {
+    setEditOpen(open);
+    if (!open) resetEditForm();
+  };
+
+  const openEdit = (item: MenuProduct) => {
+    setEditFormError(null);
+    setEditingId(item.id);
+    setEditForm({
+      name: item.name,
+      category: item.category,
+      price: String(item.price),
+      status: item.status,
+      imageUrl:
+        item.imageUrl === PLACEHOLDER_IMAGE ? "" : item.imageUrl,
+      description: item.description === "—" ? "" : item.description,
+    });
+    setEditOpen(true);
+  };
+
+  const handleEditSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setEditFormError(null);
+    if (editingId === null) return;
+
+    const name = editForm.name.trim();
+    const category = editForm.category.trim();
+    const description = editForm.description.trim();
+    const imageUrl = editForm.imageUrl.trim();
+
+    if (!name) {
+      setEditFormError("Vui lòng nhập tên món.");
+      return;
+    }
+    if (!category) {
+      setEditFormError("Vui lòng nhập danh mục.");
+      return;
+    }
+
+    const priceNum = Number(editForm.price.replace(/\s/g, "").replace(/,/g, ""));
+    if (!Number.isFinite(priceNum) || priceNum <= 0) {
+      setEditFormError("Giá phải là số dương (ví dụ: 35000).");
+      return;
+    }
+
+    const next = menuItems.map((i) =>
+      i.id === editingId
+        ? {
+            ...i,
+            name,
+            category,
+            price: Math.round(priceNum),
+            status: editForm.status,
+            imageUrl: imageUrl || PLACEHOLDER_IMAGE,
+            description: description || "—",
+          }
+        : i
+    );
+    setMenuItems(next);
+    persistMenuProducts(next);
+    setEditOpen(false);
+    resetEditForm();
   };
 
   const handleDelete = (item: MenuProduct) => {
@@ -262,6 +336,111 @@ export default function MenuManagementPage() {
         </DialogContent>
       </Dialog>
 
+      <Dialog open={editOpen} onOpenChange={handleEditOpenChange}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Sửa món</DialogTitle>
+            <DialogDescription>
+              Cập nhật thông tin món đang chọn. Thay đổi được lưu vào thực đơn và
+              trang gọi món.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleEditSubmit} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="edit-menu-name">Tên món</Label>
+              <Input
+                id="edit-menu-name"
+                value={editForm.name}
+                onChange={(e) =>
+                  setEditForm((f) => ({ ...f, name: e.target.value }))
+                }
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-menu-category">Danh mục</Label>
+              <Input
+                id="edit-menu-category"
+                list="menu-category-list"
+                value={editForm.category}
+                onChange={(e) =>
+                  setEditForm((f) => ({ ...f, category: e.target.value }))
+                }
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-menu-price">Giá bán (₫)</Label>
+              <Input
+                id="edit-menu-price"
+                inputMode="numeric"
+                value={editForm.price}
+                onChange={(e) =>
+                  setEditForm((f) => ({ ...f, price: e.target.value }))
+                }
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-menu-status">Trạng thái</Label>
+              <select
+                id="edit-menu-status"
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                value={editForm.status}
+                onChange={(e) =>
+                  setEditForm((f) => ({
+                    ...f,
+                    status: e.target.value as MenuProduct["status"],
+                  }))
+                }
+              >
+                <option value="Sẵn sàng">Sẵn sàng</option>
+                <option value="Hết hàng">Hết hàng</option>
+              </select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-menu-image">Link ảnh</Label>
+              <Input
+                id="edit-menu-image"
+                type="text"
+                value={editForm.imageUrl}
+                onChange={(e) =>
+                  setEditForm((f) => ({ ...f, imageUrl: e.target.value }))
+                }
+                placeholder="https://..."
+              />
+              <p className="text-xs text-muted-foreground">
+                Để trống sẽ dùng ảnh mặc định.
+              </p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-menu-desc">Mô tả</Label>
+              <Textarea
+                id="edit-menu-desc"
+                value={editForm.description}
+                onChange={(e) =>
+                  setEditForm((f) => ({ ...f, description: e.target.value }))
+                }
+                rows={3}
+              />
+            </div>
+            {editFormError ? (
+              <p className="text-sm text-destructive">{editFormError}</p>
+            ) : null}
+            <DialogFooter className="gap-2 sm:gap-0">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => handleEditOpenChange(false)}
+              >
+                Hủy
+              </Button>
+              <Button type="submit">Cập nhật món</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
       <div className="bg-white border border-border">
         <table className="w-full text-sm text-left">
           <thead className="border-b border-border bg-zinc-50">
@@ -327,16 +506,28 @@ export default function MenuManagementPage() {
                   </span>
                 </td>
                 <td className="px-6 py-4 text-right whitespace-nowrap">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="text-xs text-destructive border-destructive/30 hover:bg-destructive/10 hover:text-destructive"
-                    onClick={() => handleDelete(item)}
-                  >
-                    <Trash2 className="w-3.5 h-3.5 mr-1.5 shrink-0" />
-                    Xóa món
-                  </Button>
+                  <div className="inline-flex flex-wrap justify-end gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="text-xs"
+                      onClick={() => openEdit(item)}
+                    >
+                      <Pencil className="w-3.5 h-3.5 mr-1.5 shrink-0" />
+                      Sửa món
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="text-xs text-destructive border-destructive/30 hover:bg-destructive/10 hover:text-destructive"
+                      onClick={() => handleDelete(item)}
+                    >
+                      <Trash2 className="w-3.5 h-3.5 mr-1.5 shrink-0" />
+                      Xóa món
+                    </Button>
+                  </div>
                 </td>
               </tr>
             ))}
